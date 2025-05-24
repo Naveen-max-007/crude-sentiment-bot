@@ -1,4 +1,5 @@
 requests
+python-telegram-bot
 textblob
-python-telegram-bot==20.3
-nltk
+schedule
+aiohttp

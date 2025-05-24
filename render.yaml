@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: crude-news-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python crude_news_sentiment.py"
