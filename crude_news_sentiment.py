@@ -63,19 +63,23 @@ async def send_single_headline(title):
     await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
 
 async def main():
-    logging.info("Checking for new news headlines...")
+    logging.info("Fetching latest news headline...")
     headlines = fetch_crude_oil_news()
-    sent_headlines = load_sent_headlines()
-
-    new_headlines = [h for h in headlines if h not in sent_headlines]
-    if not new_headlines:
-        logging.info("No new headlines to send.")
+    if not headlines:
+        logging.info("No headlines found.")
         return
 
-    for headline in new_headlines:
-        await send_single_headline(headline)
-        save_sent_headline(headline)
-        logging.info(f"Sent: {headline}")
+    latest = headlines[0]  # Get only the latest headline
+    sentiment = analyze_sentiment(latest)
+    signal = sentiment_to_signal(sentiment)
+    message = (
+        "🛢️ <b>Crude Oil News Sentiment Update:</b>\n\n"
+        f"[{sentiment}] {latest}\n\n"
+        f"{signal}"
+    )
+    await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+    logging.info(f"Sent latest headline: {latest}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
