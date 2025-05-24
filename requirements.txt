@@ -1,5 +1,3 @@
 requests
-python-telegram-bot
 textblob
-schedule
-aiohttp
+python-telegram-bot

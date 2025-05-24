@@ -1,4 +1,3 @@
-import asyncio
 import requests
 from textblob import TextBlob
 from telegram import Bot
@@ -6,12 +5,12 @@ from telegram.constants import ParseMode
 import logging
 import os
 
+# Logging setup
 logging.basicConfig(level=logging.INFO)
-CACHE_FILE = "sent_headlines.txt"
 
-NEWS_API_KEY = "750cc6bad910478ea2cbbbad5aa6a65b"
-TELEGRAM_API_KEY = "7679824546:AAF04WjNKRqno5FTOir8kvyOCxXO2apEQcA"
-TELEGRAM_CHAT_ID = "1305865938"
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")  # Set these in Render environment variables
+TELEGRAM_API_KEY = os.getenv("TELEGRAM_API_KEY")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 bot = Bot(token=TELEGRAM_API_KEY)
 
@@ -20,18 +19,8 @@ def fetch_crude_oil_news():
     response = requests.get(url)
     if response.status_code == 200:
         articles = response.json().get("articles", [])
-        return [article["title"] for article in articles[:10]]
+        return [article["title"] for article in articles[:1]]  # Only fetch the latest headline
     return []
-
-def load_sent_headlines():
-    if not os.path.exists(CACHE_FILE):
-        return set()
-    with open(CACHE_FILE, "r", encoding="utf-8") as f:
-        return set(line.strip() for line in f.readlines())
-
-def save_sent_headline(headline):
-    with open(CACHE_FILE, "a", encoding="utf-8") as f:
-        f.write(headline + "\n")
 
 def analyze_sentiment(text):
     analysis = TextBlob(text)
@@ -48,3 +37,29 @@ def sentiment_to_signal(sentiment):
         return "📈 Signal: BUY CALL OPTION"
     elif sentiment == "Bearish":
         return "📉 Signal: BUY PUT OPTION"
+    else:
+        return "📊 Signal: NO CLEAR DIRECTION"
+
+def send_telegram_message(message):
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+
+def main():
+    logging.info("Fetching latest news headline...")
+    headlines = fetch_crude_oil_news()
+    if not headlines:
+        logging.info("No headlines found.")
+        return
+
+    latest = headlines[0]
+    sentiment = analyze_sentiment(latest)
+    signal = sentiment_to_signal(sentiment)
+    message = (
+        "🛢️ <b>Crude Oil News Sentiment Update:</b>\n\n"
+        f"[{sentiment}] {latest}\n\n"
+        f"{signal}"
+    )
+    send_telegram_message(message)
+    logging.info(f"Sent latest headline: {latest}")
+
+if __name__ == "__main__":
+    main()
