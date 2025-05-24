@@ -4,9 +4,11 @@ from textblob import TextBlob
 from telegram import Bot
 from telegram.constants import ParseMode
 import logging
+import os
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
+CACHE_FILE = "sent_headlines.txt"
 
 NEWS_API_KEY = "750cc6bad910478ea2cbbbad5aa6a65b"
 TELEGRAM_API_KEY = "7679824546:AAF04WjNKRqno5FTOir8kvyOCxXO2apEQcA"
@@ -22,39 +24,58 @@ def fetch_crude_oil_news():
         return [article["title"] for article in articles[:10]]
     return []
 
+def load_sent_headlines():
+    if not os.path.exists(CACHE_FILE):
+        return set()
+    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f.readlines())
+
+def save_sent_headline(headline):
+    with open(CACHE_FILE, "a", encoding="utf-8") as f:
+        f.write(headline + "\n")
+
 def analyze_sentiment(text):
     analysis = TextBlob(text)
-    if analysis.sentiment.polarity > 0.1:
+    polarity = analysis.sentiment.polarity
+    if polarity > 0.1:
         return "Bullish"
-    elif analysis.sentiment.polarity < -0.1:
+    elif polarity < -0.1:
         return "Bearish"
     else:
         return "Neutral"
 
-async def send_telegram_message(message):
-    await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
-
-def determine_signal(sentiments):
-    bullish = sentiments.count("Bullish")
-    bearish = sentiments.count("Bearish")
-    if bullish > bearish:
-        return "📈 Signal: BUY CALL OPTION"
-    elif bearish > bullish:
+def sentiment_to_signal(sentiment):
+    if sentiment == "Bullish":
+        return "📈 Signal: BUY CALL OPTION "
+    elif sentiment == "Bearish":
         return "📉 Signal: BUY PUT OPTION"
     else:
         return "📊 Signal: NO CLEAR DIRECTION"
 
+async def send_single_headline(title):
+    sentiment = analyze_sentiment(title)
+    signal = sentiment_to_signal(sentiment)
+    message = (
+        "🛢️ <b>Crude Oil News Sentiment Update:</b>\n\n"
+        f"[{sentiment}] {title}\n\n"
+        f"{signal}"
+    )
+    await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+
 async def main():
-    logging.info("Fetching news and sending alert...")
+    logging.info("Checking for new news headlines...")
     headlines = fetch_crude_oil_news()
-    results = [(title, analyze_sentiment(title)) for title in headlines]
-    message = "🛢️ <b>Crude Oil News Sentiment Update:</b>\n\n"
-    sentiments = []
-    for title, sentiment in results:
-        message += f"[{sentiment}] {title}\n"
-        sentiments.append(sentiment)
-    message += f"\n{determine_signal(sentiments)}"
-    await send_telegram_message(message)
+    sent_headlines = load_sent_headlines()
+
+    new_headlines = [h for h in headlines if h not in sent_headlines]
+    if not new_headlines:
+        logging.info("No new headlines to send.")
+        return
+
+    for headline in new_headlines:
+        await send_single_headline(headline)
+        save_sent_headline(headline)
+        logging.info(f"Sent: {headline}")
 
 if __name__ == "__main__":
     asyncio.run(main())
